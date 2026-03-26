@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS ETL Architecture — Insurance Startup</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-primary: #0B0F1A;
+    --bg-card: #111827;
+    --bg-card-hover: #1a2235;
+    --accent-amber: #F59E0B;
+    --accent-amber-soft: rgba(245,158,11,0.12);
+    --accent-blue: #3B82F6;
+    --accent-blue-soft: rgba(59,130,246,0.12);
+    --accent-emerald: #10B981;
+    --accent-emerald-soft: rgba(16,185,129,0.12);
+    --accent-purple: #8B5CF6;
+    --accent-purple-soft: rgba(139,92,246,0.12);
+    --accent-rose: #F43F5E;
+    --accent-rose-soft: rgba(244,63,94,0.12);
+    --accent-cyan: #06B6D4;
+    --accent-cyan-soft: rgba(6,182,212,0.12);
+    --text-primary: #F1F5F9;
+    --text-secondary: #94A3B8;
+    --text-muted: #64748B;
+    --border: rgba(255,255,255,0.06);
+    --glow: rgba(245,158,11,0.15);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Outfit', sans-serif;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* Noise overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  .hero {
+    position: relative;
+    padding: 80px 40px 60px;
+    text-align: center;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 800px;
+    background: radial-gradient(circle, var(--glow) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent-amber-soft);
+    border: 1px solid rgba(245,158,11,0.2);
+    color: var(--accent-amber);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 6px 16px;
+    border-radius: 100px;
+    margin-bottom: 24px;
+    animation: fadeDown 0.6s ease-out;
+  }
+
+  .badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--accent-amber);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(2.4rem, 5vw, 3.8rem);
+    font-weight: 400;
+    line-height: 1.15;
+    margin-bottom: 16px;
+    animation: fadeDown 0.6s ease-out 0.1s both;
+  }
+
+  h1 span { color: var(--accent-amber); }
+
+  .subtitle {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    max-width: 640px;
+    margin: 0 auto 12px;
+    font-weight: 300;
+    animation: fadeDown 0.6s ease-out 0.2s both;
+  }
+
+  .meta {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    animation: fadeDown 0.6s ease-out 0.3s both;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 40px; }
+
+  /* Section titles */
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.8rem;
+    font-weight: 400;
+    margin-bottom: 16px;
+  }
+
+  .section-desc {
+    color: var(--text-secondary);
+    font-weight: 300;
+    max-width: 620px;
+    margin-bottom: 40px;
+    font-size: 1rem;
+  }
+
+  section { padding: 60px 0; }
+
+  /* Architecture Flow Diagram */
+  .arch-flow {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 48px 32px;
+    margin-bottom: 60px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .arch-flow::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-amber), transparent);
+  }
+
+  .flow-title {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent-amber);
+    margin-bottom: 40px;
+  }
+
+  .flow-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .flow-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 18px 22px;
+    border-radius: 14px;
+    min-width: 140px;
+    text-align: center;
+    transition: transform 0.3s, box-shadow 0.3s;
+    position: relative;
+  }
+
+  .flow-node:hover {
+    transform: translateY(-4px);
+  }
+
+  .flow-node .icon {
+    font-size: 2rem;
+    line-height: 1;
+  }
+
+  .flow-node .label {
+    font-weight: 600;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+  }
+
+  .flow-node .sub {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .flow-node.source { background: var(--accent-blue-soft); border: 1px solid rgba(59,130,246,0.2); }
+  .flow-node.source .label { color: var(--accent-blue); }
+
+  .flow-node.storage { background: var(--accent-amber-soft); border: 1px solid rgba(245,158,11,0.2); }
+  .flow-node.storage .label { color: var(--accent-amber); }
+
+  .flow-node.process { background: var(--accent-emerald-soft); border: 1px solid rgba(16,185,129,0.2); }
+  .flow-node.process .label { color: var(--accent-emerald); }
+
+  .flow-node.transform { background: var(--accent-purple-soft); border: 1px solid rgba(139,92,246,0.2); }
+  .flow-node.transform .label { color: var(--accent-purple); }
+
+  .flow-node.query { background: var(--accent-cyan-soft); border: 1px solid rgba(6,182,212,0.2); }
+  .flow-node.query .label { color: var(--accent-cyan); }
+
+  .flow-node.output { background: var(--accent-rose-soft); border: 1px solid rgba(244,63,94,0.2); }
+  .flow-node.output .label { color: var(--accent-rose); }
+
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    color: var(--text-muted);
+    font-size: 1.3rem;
+    padding: 0 6px;
+    opacity: 0.5;
+  }
+
+  .flow-stage-label {
+    text-align: center;
+    margin-top: -4px;
+    margin-bottom: 30px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    opacity: 0.6;
+  }
+
+  /* Layer cards */
+  .layers-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .layer-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 24px;
+    align-items: start;
+    transition: border-color 0.3s, background 0.3s;
+  }
+
+  .layer-card:hover {
+    background: var(--bg-card-hover);
+    border-color: rgba(255,255,255,0.1);
+  }
+
+  .layer-number {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2.2rem;
+    line-height: 1;
+    opacity: 0.15;
+    min-width: 40px;
+  }
+
+  .layer-content h3 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.25rem;
+    font-weight: 400;
+    margin-bottom: 6px;
+  }
+
+  .layer-content p {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 300;
+    margin-bottom: 12px;
+  }
+
+  .layer-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .tool-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .layer-cost {
+    text-align: right;
+    min-width: 100px;
+  }
+
+  .layer-cost .cost-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+
+  .layer-cost .cost-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.1rem;
+  }
+
+  .cost-free { color: var(--accent-emerald); }
+  .cost-low { color: var(--accent-amber); }
+
+  /* Comparison Table */
+  .comparison-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .comparison {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 700px;
+  }
+
+  .comparison th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 500;
+  }
+
+  .comparison td {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    vertical-align: top;
+  }
+
+  .comparison tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .comparison .tool-name {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .tag-free, .tag-low, .tag-medium {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .tag-free { background: var(--accent-emerald-soft); color: var(--accent-emerald); }
+  .tag-low { background: var(--accent-amber-soft); color: var(--accent-amber); }
+  .tag-medium { background: var(--accent-rose-soft); color: var(--accent-rose); }
+
+  .rec-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--accent-amber-soft);
+    color: var(--accent-amber);
+    border: 1px solid rgba(245,158,11,0.2);
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  /* Phase Timeline */
+  .timeline {
+    position: relative;
+    padding-left: 40px;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: linear-gradient(to bottom, var(--accent-amber), var(--accent-emerald), var(--accent-blue));
+    opacity: 0.3;
+  }
+
+  .timeline-item {
+    position: relative;
+    margin-bottom: 36px;
+  }
+
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -32px;
+    top: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--accent-amber);
+    background: var(--bg-primary);
+  }
+
+  .timeline-item:nth-child(2)::before { border-color: var(--accent-emerald); }
+  .timeline-item:nth-child(3)::before { border-color: var(--accent-blue); }
+
+  .timeline-phase {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-amber);
+    margin-bottom: 4px;
+  }
+
+  .timeline-item:nth-child(2) .timeline-phase { color: var(--accent-emerald); }
+  .timeline-item:nth-child(3) .timeline-phase { color: var(--accent-blue); }
+
+  .timeline-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.15rem;
+    margin-bottom: 6px;
+  }
+
+  .timeline-desc {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    font-weight: 300;
+  }
+
+  /* Cost Summary */
+  .cost-summary {
+    background: linear-gradient(135deg, rgba(245,158,11,0.06), rgba(16,185,129,0.06));
+    border: 1px solid rgba(245,158,11,0.15);
+    border-radius: 16px;
+    padding: 36px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 28px;
+    margin-top: 40px;
+  }
+
+  .cost-item { text-align: center; }
+
+  .cost-item .ci-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .cost-item .ci-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.8rem;
+    color: var(--accent-emerald);
+  }
+
+  .cost-item .ci-note {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* Callout */
+  .callout {
+    background: var(--bg-card);
+    border-left: 3px solid var(--accent-amber);
+    border-radius: 0 12px 12px 0;
+    padding: 24px 28px;
+    margin: 40px 0;
+  }
+
+  .callout-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--accent-amber);
+    margin-bottom: 6px;
+  }
+
+  .callout p {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    font-weight: 300;
+  }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 60px 40px;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+  }
+
+  footer p {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Animations */
+  @keyframes fadeDown {
+    from { opacity:0; transform: translateY(-12px); }
+    to { opacity:1; transform: translateY(0); }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity:1; }
+    50% { opacity:0.4; }
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .hero { padding: 60px 20px 40px; }
+    .container { padding: 0 20px; }
+    .layer-card { grid-template-columns: 1fr; gap: 12px; }
+    .layer-number { display: none; }
+    .layer-cost { text-align: left; }
+    .flow-row { gap: 8px; }
+    .flow-arrow { display: none; }
+    .flow-node { min-width: 100px; padding: 12px; }
+    .cost-summary { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="badge">Architecture Recommendation</div>
+  <h1>AWS <span>ETL Architecture</span><br>for Insurance Startup</h1>
+  <p class="subtitle">A cost-optimized, serverless-first data platform designed for a growing insurance company — starting near zero and scaling with demand.</p>
+  <p class="meta">Prepared March 2026 &nbsp;·&nbsp; VP Infrastructure &nbsp;·&nbsp; Confidential</p>
+</header>
+
+<!-- ARCHITECTURE FLOW -->
+<div class="container">
+  <div class="arch-flow">
+    <div class="flow-title">▸ Recommended Data Flow Architecture</div>
+
+    <div class="flow-row">
+      <div class="flow-node source">
+        <div class="icon">📋</div>
+        <div class="label">Data Sources</div>
+        <div class="sub">APIs · CSVs · DBs</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node storage">
+        <div class="icon">🪣</div>
+        <div class="label">Amazon S3</div>
+        <div class="sub">Raw Data Lake</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node process">
+        <div class="icon">⚡</div>
+        <div class="label">Lambda / Glue</div>
+        <div class="sub">Extract & Load</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node transform">
+        <div class="icon">🔧</div>
+        <div class="label">dbt Core</div>
+        <div class="sub">Transform</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node query">
+        <div class="icon">🔍</div>
+        <div class="label">Athena</div>
+        <div class="sub">Query Engine</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node output">
+        <div class="icon">📊</div>
+        <div class="label">QuickSight</div>
+        <div class="sub">Dashboards & BI</div>
+      </div>
+    </div>
+    <div class="flow-stage-label">Ingest &nbsp;&nbsp;→&nbsp;&nbsp; Store &nbsp;&nbsp;→&nbsp;&nbsp; Process &nbsp;&nbsp;→&nbsp;&nbsp; Transform &nbsp;&nbsp;→&nbsp;&nbsp; Analyze &nbsp;&nbsp;→&nbsp;&nbsp; Visualize</div>
+
+    <div class="callout" style="margin:20px 0 0;">
+      <div class="callout-title">Why This Stack?</div>
+      <p>Every component is either serverless or open-source. You pay nothing when idle and pennies when active. No servers to manage, no licenses to buy, and it scales automatically as your policy and claims data grows.</p>
+    </div>
+  </div>
+</div>
+
+<!-- LAYER BREAKDOWN -->
+<section>
+  <div class="container">
+    <div class="section-label">Architecture Layers</div>
+    <h2>Stack Breakdown</h2>
+    <p class="section-desc">Each layer is chosen for minimal cost, zero infrastructure overhead, and seamless integration within the AWS ecosystem.</p>
+
+    <div class="layers-grid">
+
+      <div class="layer-card">
+        <div class="layer-number">01</div>
+        <div class="layer-content">
+          <h3>Ingestion Layer — Amazon S3</h3>
+          <p>All raw data lands in S3 as the central data lake. Organize by source (policies, claims, agents) with a folder structure using year/month/day partitions. S3 event notifications trigger downstream ETL automatically.</p>
+          <div class="layer-tools">
+            <span class="tool-tag">S3 Standard</span>
+            <span class="tool-tag">S3 Event Notifications</span>
+            <span class="tool-tag">S3 Lifecycle Rules</span>
+          </div>
+        </div>
+        <div class="layer-cost">
+          <div class="cost-label">Est. Cost</div>
+          <div class="cost-value cost-low">~$0.02/GB</div>
+        </div>
+      </div>
+
+      <div class="layer-card">
+        <div class="layer-number">02</div>
+        <div class="layer-content">
+          <h3>Extract & Load — Lambda + Glue</h3>
+          <p>AWS Lambda handles lightweight, event-driven extraction (API pulls, file processing). For heavier batch jobs, AWS Glue provides serverless Spark with a pay-per-second model. Use Lambda for real-time triggers and Glue for scheduled bulk loads.</p>
+          <div class="layer-tools">
+            <span class="tool-tag">AWS Lambda</span>
+            <span class="tool-tag">AWS Glue</span>
+            <span class="tool-tag">Step Functions</span>
+            <span class="tool-tag">EventBridge</span>
+          </div>
+        </div>
+        <div class="layer-cost">
+          <div class="cost-label">Est. Cost</div>
+          <div class="cost-value cost-free">Free Tier+</div>
+        </div>
+      </div>
+
+      <div class="layer-card">
+        <div class="layer-number">03</div>
+        <div class="layer-content">
+          <h3>Transform — dbt Core (Open Source)</h3>
+          <p>dbt Core runs SQL-based transformations directly against Athena or Redshift. Define models as version-controlled SQL files. Build insurance-specific transformations: claims aggregation, loss ratios, premium calculations, and regulatory reporting tables.</p>
+          <div class="layer-tools">
+            <span class="tool-tag">dbt Core</span>
+            <span class="tool-tag">SQL Models</span>
+            <span class="tool-tag">Git Version Control</span>
+            <span class="tool-tag">dbt Tests</span>
+          </div>
+        </div>
+        <div class="layer-cost">
+          <div class="cost-label">Est. Cost</div>
+          <div class="cost-value cost-free">Free</div>
+        </div>
+      </div>
+
+      <div class="layer-card">
+        <div class="layer-number">04</div>
+        <div class="layer-content">
+          <h3>Query Engine — Amazon Athena</h3>
+          <p>Athena queries data directly in S3 using standard SQL — no infrastructure to manage. Charged only per TB of data scanned, and using columnar formats (Parquet/ORC) plus partitioning can reduce costs by 90%+.</p>
+          <div class="layer-tools">
+            <span class="tool-tag">Amazon Athena</span>
+            <span class="tool-tag">AWS Glue Catalog</span>
+            <span class="tool-tag">Parquet / ORC</span>
+          </div>
+        </div>
+        <div class="layer-cost">
+          <div class="cost-label">Est. Cost</div>
+          <div class="cost-value cost-low">$5/TB scanned</div>
+        </div>
+      </div>
+
+      <div class="layer-card">
+        <div class="layer-number">05</div>
+        <div class="layer-content">
+          <h3>Orchestration — Step Functions + EventBridge</h3>
+          <p>AWS Step Functions coordinates multi-step ETL workflows visually. EventBridge handles scheduling and event routing. Together they replace the need for a dedicated Airflow server for early-stage workloads.</p>
+          <div class="layer-tools">
+            <span class="tool-tag">Step Functions</span>
+            <span class="tool-tag">EventBridge Scheduler</span>
+            <span class="tool-tag">CloudWatch</span>
+          </div>
+        </div>
+        <div class="layer-cost">
+          <div class="cost-label">Est. Cost</div>
+          <div class="cost-value cost-free">Free Tier+</div>
+        </div>
+      </div>
+
+      <div class="layer-card">
+        <div class="layer-number">06</div>
+        <div class="layer-content">
+          <h3>Visualization — QuickSight or Open Source</h3>
+          <p>Amazon QuickSight offers pay-per-session BI dashboards. Alternatively, Apache Superset (self-hosted) is a powerful free option. Build executive dashboards for KPIs: loss ratio, combined ratio, claims frequency, and premium growth.</p>
+          <div class="layer-tools">
+            <span class="tool-tag">QuickSight</span>
+            <span class="tool-tag">Apache Superset</span>
+            <span class="tool-tag">Metabase</span>
+          </div>
+        </div>
+        <div class="layer-cost">
+          <div class="cost-label">Est. Cost</div>
+          <div class="cost-value cost-low">$0–$5/user</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- TOOL COMPARISON -->
+<section>
+  <div class="container">
+    <div class="section-label">ETL Tool Comparison</div>
+    <h2>Free & Low-Cost ETL Options on AWS</h2>
+    <p class="section-desc">A side-by-side view of every viable ETL tool, with our recommendation highlighted.</p>
+
+    <div class="comparison-wrapper">
+    <table class="comparison">
+      <thead>
+        <tr>
+          <th>Tool</th>
+          <th>Type</th>
+          <th>Cost</th>
+          <th>Best For</th>
+          <th>Complexity</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tool-name">AWS Lambda</span> <span class="rec-badge">★ Recommended</span></td>
+          <td>Event-driven compute</td>
+          <td><span class="tag-free">Free tier</span></td>
+          <td>Lightweight file processing, API ingestion, real-time triggers</td>
+          <td>Low</td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">AWS Glue</span> <span class="rec-badge">★ Recommended</span></td>
+          <td>Managed Spark ETL</td>
+          <td><span class="tag-low">Pay-per-second</span></td>
+          <td>Batch processing, schema inference, data catalog</td>
+          <td>Medium</td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">dbt Core</span> <span class="rec-badge">★ Recommended</span></td>
+          <td>SQL transformation</td>
+          <td><span class="tag-free">Free (OSS)</span></td>
+          <td>Data modeling, transformation logic, testing</td>
+          <td>Low–Medium</td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">Apache Airflow</span></td>
+          <td>Workflow orchestration</td>
+          <td><span class="tag-free">Free (OSS)</span></td>
+          <td>Complex DAG scheduling, multi-system orchestration</td>
+          <td>High</td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">Apache NiFi</span></td>
+          <td>Visual data flow</td>
+          <td><span class="tag-free">Free (OSS)</span></td>
+          <td>Visual ETL design, real-time data routing</td>
+          <td>Medium</td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">Meltano</span></td>
+          <td>ELT framework</td>
+          <td><span class="tag-free">Free (OSS)</span></td>
+          <td>Singer-based extract/load, declarative pipelines</td>
+          <td>Medium</td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">Talend Open Studio</span></td>
+          <td>GUI-based ETL</td>
+          <td><span class="tag-free">Free (OSS)</span></td>
+          <td>Visual ETL with pre-built connectors</td>
+          <td>Medium</td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">Apache Spark (EMR)</span></td>
+          <td>Big data processing</td>
+          <td><span class="tag-medium">Variable</span></td>
+          <td>Large-scale data processing (use spot instances)</td>
+          <td>High</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<!-- ROLLOUT PLAN -->
+<section>
+  <div class="container">
+    <div class="section-label">Implementation Roadmap</div>
+    <h2>Phased Rollout</h2>
+    <p class="section-desc">Start lean, prove value, then expand. Each phase builds on the previous one without rearchitecting.</p>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 1 · Weeks 1–4</div>
+        <div class="timeline-title">Foundation — Ingest & Store</div>
+        <div class="timeline-desc">Set up S3 bucket structure with proper partitioning. Deploy Lambda functions for initial data ingestion from source systems (policy admin, claims). Configure IAM roles, VPC, and encryption (AES-256). Establish the Glue Data Catalog for schema management.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 2 · Weeks 5–8</div>
+        <div class="timeline-title">Transform & Model</div>
+        <div class="timeline-desc">Deploy dbt Core with Git-based project structure. Build initial transformation models: staging layer, intermediate calculations (loss ratio, claim severity), and mart tables for reporting. Set up Athena as the query engine and convert data to Parquet format.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 3 · Weeks 9–12</div>
+        <div class="timeline-title">Orchestrate & Visualize</div>
+        <div class="timeline-desc">Implement Step Functions for end-to-end pipeline orchestration. Add monitoring via CloudWatch. Deploy QuickSight or Superset for executive dashboards. Build insurance KPI views: combined ratio, premium trends, claims frequency, and regulatory reports.</div>
+      </div>
+    </div>
+
+    <!-- Cost Summary -->
+    <div class="cost-summary">
+      <div class="cost-item">
+        <div class="ci-label">Monthly (Phase 1)</div>
+        <div class="ci-value">~$15</div>
+        <div class="ci-note">S3 + Lambda free tier</div>
+      </div>
+      <div class="cost-item">
+        <div class="ci-label">Monthly (Phase 2)</div>
+        <div class="ci-value">~$50</div>
+        <div class="ci-note">+ Athena queries + Glue</div>
+      </div>
+      <div class="cost-item">
+        <div class="ci-label">Monthly (Phase 3)</div>
+        <div class="ci-value">~$120</div>
+        <div class="ci-note">Full stack operational</div>
+      </div>
+      <div class="cost-item">
+        <div class="ci-label">Licensing Cost</div>
+        <div class="ci-value" style="color:var(--accent-amber);">$0</div>
+        <div class="ci-note">100% serverless + OSS</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INSURANCE CONSIDERATIONS -->
+<section>
+  <div class="container">
+    <div class="section-label">Industry Considerations</div>
+    <h2>Insurance-Specific Notes</h2>
+
+    <div class="callout">
+      <div class="callout-title">Compliance & Security</div>
+      <p>Insurance data is highly regulated. Enable S3 server-side encryption (SSE-S3 or SSE-KMS), enforce bucket policies, and use AWS CloudTrail for audit logging. Consider AWS Config rules for continuous compliance checks. If handling PHI, ensure HIPAA BAA is in place with AWS.</p>
+    </div>
+
+    <div class="callout">
+      <div class="callout-title">Data Partitioning Strategy</div>
+      <p>Partition by line of business (auto, home, life), then by date. This dramatically reduces Athena scan costs and aligns with how insurance analysts naturally slice data. Example: s3://datalake/claims/auto/2026/03/26/</p>
+    </div>
+
+    <div class="callout">
+      <div class="callout-title">Scaling Path</div>
+      <p>When data volumes exceed what Lambda + Glue handles comfortably, the natural next step is Amazon Redshift Serverless (pay-per-query warehouse) or Apache Spark on EMR with spot instances. The S3-centric architecture means no data migration is needed — just point the new compute at the same lake.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>AWS ETL Architecture Recommendation &nbsp;·&nbsp; Insurance Startup &nbsp;·&nbsp; March 2026</p>
+  <p style="margin-top:8px; opacity:0.5;">This document is for planning purposes. Actual costs depend on usage volume and AWS region.</p>
+</footer>
+
+</body>
+</html>
